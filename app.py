@@ -11,7 +11,7 @@ import requests
 # 程式版本與更新設定
 VERSION = "V1.0.0"
 # 請自行替換為實際的 GitHub repository API URL
-UPDATE_URL = "https://api.github.com/repos/ChenYuChunEric/RenameandCut_Pic/releases/latest"
+UPDATE_URL = "https://github.com/ChenYuChunEric/RenameandCut_Pic.git"
 
 # 匯入核心處理器
 from processor import PhotoProcessor
