@@ -6,6 +6,12 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from PIL import Image, ImageTk, ImageDraw
+import requests
+
+# 程式版本與更新設定
+VERSION = "V1.0.0"
+# 請自行替換為實際的 GitHub repository API URL
+UPDATE_URL = "https://api.github.com/repos/ChenYuChunEric/RenameandCut_Pic/releases/latest"
 
 # 匯入核心處理器
 from processor import PhotoProcessor
@@ -54,7 +60,7 @@ class PhotoProcessorApp(ctk.CTk):
         super().__init__()
         
         # 視窗基本設定
-        self.title("新生照片批次處理與更名工具")
+        self.title(f"新生照片批次處理與更名工具 - {VERSION}")
         self.geometry("1100x750")
         self.minsize(1000, 700)
         
@@ -85,7 +91,20 @@ class PhotoProcessorApp(ctk.CTk):
         
         # 初始化介面佈局
         self._create_widgets()
+        # 啟動版本更新檢查（非阻塞）
+        threading.Thread(target=self._check_for_updates, daemon=True).start()
         
+    def _check_for_updates(self):
+        try:
+            response = requests.get(UPDATE_URL, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                latest_version = data.get("tag_name")
+                if latest_version and latest_version != VERSION:
+                    print(f"發現新版本: {latest_version}")
+        except Exception:
+            pass
+
     def _create_widgets(self):
         # 設定主網格佈局 (1 row, 2 columns)
         self.grid_columnconfigure(0, weight=0, minsize=400) # 左側控制面板固定寬度
@@ -335,6 +354,29 @@ class PhotoProcessorApp(ctk.CTk):
     # =====================================================================
     # 事件處理與交互邏輯
     # =====================================================================
+    def _check_for_updates(self):
+        """向 GitHub 查詢最新 Release，若比當前 VERSION 更新則提示使用者"""
+        try:
+            resp = requests.get(UPDATE_URL, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                latest_tag = data.get("tag_name", "")
+                if latest_tag:
+                    # 移除前導的 'v' 或 'V'
+                    cur = VERSION.lstrip('vV')
+                    latest = latest_tag.lstrip('vV')
+                    # 簡易版本比較（僅支援 X.Y.Z 格式）
+                    def to_tuple(v):
+                        return tuple(int(part) for part in v.split('.') if part.isdigit())
+                    if to_tuple(latest) > to_tuple(cur):
+                        messagebox.showinfo(
+                            "版本更新",
+                            f"有新版本可用: {latest_tag}\n目前版本: {VERSION}\n請前往 GitHub 下載最新版本。"
+                        )
+        except Exception as e:
+            # 若檢查失敗，僅記錄錯誤，不打擾使用者
+            print(f"更新檢查失敗: {e}")
+
     def _select_excel_file(self):
         file_path = filedialog.askopenfilename(
             title="選擇對照資料 (Excel/CSV)",
