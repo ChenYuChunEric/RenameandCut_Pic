@@ -7,11 +7,12 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 from PIL import Image, ImageTk, ImageDraw
 import requests
+import webbrowser
 
 # 程式版本與更新設定
 VERSION = "V1.0.0"
 # 請自行替換為實際的 GitHub repository API URL
-UPDATE_URL = "https://github.com/ChenYuChunEric/RenameandCut_Pic.git"
+UPDATE_URL = "https://api.github.com/repos/ChenYuChunEric/RenameandCut_Pic/releases/latest"
 
 # 匯入核心處理器
 from processor import PhotoProcessor
@@ -94,17 +95,6 @@ class PhotoProcessorApp(ctk.CTk):
         # 啟動版本更新檢查（非阻塞）
         threading.Thread(target=self._check_for_updates, daemon=True).start()
         
-    def _check_for_updates(self):
-        try:
-            response = requests.get(UPDATE_URL, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                latest_version = data.get("tag_name")
-                if latest_version and latest_version != VERSION:
-                    print(f"發現新版本: {latest_version}")
-        except Exception:
-            pass
-
     def _create_widgets(self):
         # 設定主網格佈局 (1 row, 2 columns)
         self.grid_columnconfigure(0, weight=0, minsize=400) # 左側控制面板固定寬度
@@ -357,10 +347,12 @@ class PhotoProcessorApp(ctk.CTk):
     def _check_for_updates(self):
         """向 GitHub 查詢最新 Release，若比當前 VERSION 更新則提示使用者"""
         try:
+            # 使用 GitHub API 獲取最新 Release
             resp = requests.get(UPDATE_URL, timeout=5)
             if resp.status_code == 200:
                 data = resp.json()
                 latest_tag = data.get("tag_name", "")
+                release_url = data.get("html_url", "https://github.com/ChenYuChunEric/RenameandCut_Pic/releases")
                 if latest_tag:
                     # 移除前導的 'v' 或 'V'
                     cur = VERSION.lstrip('vV')
@@ -368,14 +360,83 @@ class PhotoProcessorApp(ctk.CTk):
                     # 簡易版本比較（僅支援 X.Y.Z 格式）
                     def to_tuple(v):
                         return tuple(int(part) for part in v.split('.') if part.isdigit())
-                    if to_tuple(latest) > to_tuple(cur):
-                        messagebox.showinfo(
-                            "版本更新",
-                            f"有新版本可用: {latest_tag}\n目前版本: {VERSION}\n請前往 GitHub 下載最新版本。"
-                        )
+                    
+                    try:
+                        is_older = to_tuple(latest) > to_tuple(cur)
+                    except Exception:
+                        is_older = latest != cur
+                        
+                    if is_older:
+                        # 執行緒安全：回到主執行緒顯示自訂更新視窗
+                        self.after(0, self._show_update_dialog, latest_tag, release_url)
         except Exception as e:
             # 若檢查失敗，僅記錄錯誤，不打擾使用者
             print(f"更新檢查失敗: {e}")
+
+    def _show_update_dialog(self, latest_version, release_url):
+        """顯示自訂的更新提示彈跳視窗"""
+        dialog = ctk.CTkToplevel(self)
+        dialog.title("發現新版本")
+        dialog.geometry("380x220")
+        dialog.resizable(False, False)
+        
+        # 讓視窗保持在最上層，且焦點在它身上
+        dialog.transient(self)
+        dialog.grab_set()
+        
+        # 將視窗置中於主視窗
+        self.update_idletasks() # 確保主視窗幾何資訊已更新
+        main_x = self.winfo_x()
+        main_y = self.winfo_y()
+        main_w = self.winfo_width()
+        main_h = self.winfo_height()
+        dialog_x = main_x + (main_w - 380) // 2
+        dialog_y = main_y + (main_h - 220) // 2
+        dialog.geometry(f"380x220+{dialog_x}+{dialog_y}")
+        
+        # 標題
+        label_title = ctk.CTkLabel(
+            dialog, 
+            text="軟體更新提示", 
+            font=ctk.CTkFont(family="Microsoft JhengHei", size=16, weight="bold")
+        )
+        label_title.pack(pady=(20, 10))
+        
+        # 訊息內容
+        label_info = ctk.CTkLabel(
+            dialog, 
+            text=f"偵測到有新版本可用！\n目前版本: {VERSION}\n最新版本: {latest_version}\n\n建議立即更新以取得最新功能與錯誤修正。", 
+            font=ctk.CTkFont(family="Microsoft JhengHei", size=13)
+        )
+        label_info.pack(pady=5)
+        
+        # 按鈕容器
+        btn_frame = ctk.CTkFrame(dialog, fg_color="transparent")
+        btn_frame.pack(fill="x", side="bottom", pady=20)
+        
+        def open_release():
+            webbrowser.open(release_url)
+            dialog.destroy()
+            
+        btn_update = ctk.CTkButton(
+            btn_frame, 
+            text="前往 Release 頁面更新", 
+            fg_color="#2ECC71", 
+            hover_color="#27AE60",
+            font=ctk.CTkFont(family="Microsoft JhengHei", size=13, weight="bold"),
+            command=open_release
+        )
+        btn_update.pack(side="left", expand=True, padx=(20, 10))
+        
+        btn_close = ctk.CTkButton(
+            btn_frame, 
+            text="稍後再說", 
+            fg_color="gray50", 
+            hover_color="gray40",
+            font=ctk.CTkFont(family="Microsoft JhengHei", size=13),
+            command=dialog.destroy
+        )
+        btn_close.pack(side="right", expand=True, padx=(10, 20))
 
     def _select_excel_file(self):
         file_path = filedialog.askopenfilename(
