@@ -64,6 +64,27 @@ class TestPhotoProcessor(unittest.TestCase):
         self.assertEqual(y2, 640)
         self.assertEqual(x2 - x1, 480)
 
+    def test_05b_calculate_crop_box_horizontal_offset(self):
+        """測試裁切框水平偏移與邊界限制 (Clamp)"""
+        # 原圖 800x600，目標 300x400，縮放 0.8，水平偏移 0.1 (往右移動裁切框，即 x1 變大)
+        # 最大裁切 w, h 為 450x600
+        # 縮放後為 360x480
+        # 預設中心 x = 400。偏移 0.1 代表 center_x 向右移動 0.1 * 800 = 80 像素，新中心 x = 480
+        # 新裁切框寬 360，x1 = 480 - 180 = 300，x2 = 480 + 180 = 660 -> 未超出邊界
+        x1, y1, x2, y2 = PhotoProcessor.calculate_crop_box(800, 600, 300, 400, scale=0.8, vertical_offset=0.0, horizontal_offset=0.1)
+        self.assertEqual(x1, 300)
+        self.assertEqual(x2, 660)
+        self.assertEqual(x2 - x1, 360)
+
+        # 測試超出邊界限制 (Clamp)
+        # 偏移 0.5 代表 center_x 向右移動 0.5 * 800 = 400 像素，新中心 x = 800
+        # x2 = 800 + 180 = 980 -> 超出 800 邊界
+        # Clamp 後，x2 應為 800，x1 應為 800 - 360 = 440
+        x1, y1, x2, y2 = PhotoProcessor.calculate_crop_box(800, 600, 300, 400, scale=0.8, vertical_offset=0.0, horizontal_offset=0.5)
+        self.assertEqual(x1, 440)
+        self.assertEqual(x2, 800)
+        self.assertEqual(x2 - x1, 360)
+
     def test_06_process_image_preview(self):
         """測試相片處理預覽 (不儲存檔案)"""
         src_path = os.path.join(self.test_data_dir, "A123456789.jpg")

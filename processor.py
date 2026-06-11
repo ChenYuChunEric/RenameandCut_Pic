@@ -197,11 +197,12 @@ class PhotoProcessor:
             raise RuntimeError(f"掃描資料夾失敗: {str(e)}")
 
     @staticmethod
-    def calculate_crop_box(orig_width, orig_height, target_width, target_height, scale=1.0, vertical_offset=0.0):
+    def calculate_crop_box(orig_width, orig_height, target_width, target_height, scale=1.0, vertical_offset=0.0, horizontal_offset=0.0):
         """
         計算在原圖上的裁切框座標 (x1, y1, x2, y2)。
         - scale: 縮放比例 (0.1 ~ 1.0)，代表裁切框占最大可用區域的比例。比例越小，最終圖片人像越大（Zoom-in）。
         - vertical_offset: 垂直偏移量 (-0.5 ~ 0.5)，正值代表裁切框向上移動（保留上方），負值向下移動。
+        - horizontal_offset: 水平偏移量 (-0.5 ~ 0.5)，正值代表裁切框向右移動，負值向左移動。
         """
         target_ratio = target_width / target_height
         orig_ratio = orig_width / orig_height
@@ -228,6 +229,11 @@ class PhotoProcessor:
         # 垂直偏移量乘以原圖高度作為像素偏移
         pixel_offset_y = -vertical_offset * orig_height  # 習慣上：正值往上移，所以減去 offset
         center_y += pixel_offset_y
+        
+        # 套用水平位移 (限制在安全範圍內，避免裁切框超出原圖)
+        # 水平偏移量乘以原圖寬度作為像素偏移
+        pixel_offset_x = horizontal_offset * orig_width  # 習慣上：正值往右移，所以加上 offset
+        center_x += pixel_offset_x
         
         # 計算初步的左上角與右下角座標
         x1 = center_x - crop_w / 2.0
@@ -259,7 +265,7 @@ class PhotoProcessor:
         return int(x1), int(y1), int(x2), int(y2)
 
     @classmethod
-    def process_image(cls, src_path, dest_path, target_width, target_height, scale=1.0, vertical_offset=0.0, output_format='JPEG'):
+    def process_image(cls, src_path, dest_path, target_width, target_height, scale=1.0, vertical_offset=0.0, horizontal_offset=0.0, output_format='JPEG'):
         """
         處理單張圖片（轉檔、裁切、縮放）。
         - dest_path: 如果為 None，則不存檔，僅回傳 PIL Image 物件（用於預覽）。
@@ -277,7 +283,7 @@ class PhotoProcessor:
                 
                 # 計算裁切框
                 x1, y1, x2, y2 = cls.calculate_crop_box(
-                    orig_w, orig_h, target_width, target_height, scale, vertical_offset
+                    orig_w, orig_h, target_width, target_height, scale, vertical_offset, horizontal_offset
                 )
                 
                 # 進行裁切

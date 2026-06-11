@@ -86,8 +86,10 @@ class PhotoProcessorApp(ctk.CTk):
         self.photo_widgets = []
         
         # 滑鼠拖曳狀態變數
+        self.drag_start_x = 0
         self.drag_start_y = 0
         self.preview_ratio = 1.0
+        self.orig_width = 1.0
         self.orig_height = 1.0
         
         # 初始化介面佈局
@@ -296,16 +298,28 @@ class PhotoProcessorApp(ctk.CTk):
         self.dest_img_label.pack(fill="both", expand=True, padx=10, pady=10)
         
         # 微調控制面板 (滑桿)
-        control_panel = ctk.CTkFrame(preview_container, height=80, fg_color="transparent")
+        control_panel = ctk.CTkFrame(preview_container, height=110, fg_color="transparent")
         control_panel.pack(fill="x", padx=15, pady=(5, 10))
         control_panel.grid_columnconfigure(0, weight=1)
         control_panel.grid_columnconfigure(1, weight=1)
         control_panel.grid_rowconfigure(0, weight=1)
         control_panel.grid_rowconfigure(1, weight=1)
+        control_panel.grid_rowconfigure(2, weight=1)
         
-        # 滑桿 1：垂直偏移量 (Vertical Offset)
+        # 滑桿 1：水平偏移量 (Horizontal Offset)
+        h_frame = ctk.CTkFrame(control_panel, fg_color="transparent")
+        h_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=2)
+        h_lbl = ctk.CTkLabel(h_frame, text="水平位移 (左右):", width=100, anchor="w")
+        h_lbl.pack(side="left")
+        self.h_offset_slider = ctk.CTkSlider(h_frame, from_=-0.5, to=0.5, number_of_steps=100, command=self._on_slider_changed)
+        self.h_offset_slider.set(0.0)
+        self.h_offset_slider.pack(side="left", fill="x", expand=True, padx=5)
+        self.h_val_label = ctk.CTkLabel(h_frame, text="0.00", width=40)
+        self.h_val_label.pack(side="right")
+        
+        # 滑桿 2：垂直偏移量 (Vertical Offset)
         v_frame = ctk.CTkFrame(control_panel, fg_color="transparent")
-        v_frame.grid(row=0, column=0, sticky="ew", padx=10, pady=2)
+        v_frame.grid(row=0, column=1, sticky="ew", padx=10, pady=2)
         v_lbl = ctk.CTkLabel(v_frame, text="垂直位移 (上下):", width=100, anchor="w")
         v_lbl.pack(side="left")
         self.v_offset_slider = ctk.CTkSlider(v_frame, from_=-0.5, to=0.5, number_of_steps=100, command=self._on_slider_changed)
@@ -314,9 +328,9 @@ class PhotoProcessorApp(ctk.CTk):
         self.v_val_label = ctk.CTkLabel(v_frame, text="0.00", width=40)
         self.v_val_label.pack(side="right")
         
-        # 滑桿 2：裁切比例 / 縮放 (Zoom)
+        # 滑桿 3：裁切比例 / 縮放 (Zoom)
         s_frame = ctk.CTkFrame(control_panel, fg_color="transparent")
-        s_frame.grid(row=0, column=1, sticky="ew", padx=10, pady=2)
+        s_frame.grid(row=1, column=0, sticky="ew", padx=10, pady=2)
         s_lbl = ctk.CTkLabel(s_frame, text="裁切框大小 (縮放):", width=110, anchor="w")
         s_lbl.pack(side="left")
         self.scale_slider = ctk.CTkSlider(s_frame, from_=0.1, to=1.0, number_of_steps=90, command=self._on_slider_changed)
@@ -327,7 +341,7 @@ class PhotoProcessorApp(ctk.CTk):
         
         # 微調快捷鍵與套用
         btn_frame = ctk.CTkFrame(control_panel, fg_color="transparent")
-        btn_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
+        btn_frame.grid(row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(5, 0))
         
         self.preset_center_btn = ctk.CTkButton(btn_frame, text="置中對齊 (0.0)", width=100, fg_color="gray30", hover_color="gray40", command=self._set_preset_center)
         self.preset_center_btn.pack(side="left", padx=5)
@@ -529,6 +543,7 @@ class PhotoProcessorApp(ctk.CTk):
                     'status': '待處理',
                     'scale': 1.0,
                     'vertical_offset': 0.0,
+                    'horizontal_offset': 0.0,
                 })
                 
             self._update_photo_match_status()
@@ -605,8 +620,8 @@ class PhotoProcessorApp(ctk.CTk):
             
             # 狀態與微調參數欄
             status_text = p['status']
-            if p['scale'] != 1.0 or p['vertical_offset'] != 0.0:
-                status_text += f" (已微調: 縮放 {int(p['scale']*100)}%, 偏移 {p['vertical_offset']:.2f})"
+            if p['scale'] != 1.0 or p['vertical_offset'] != 0.0 or p.get('horizontal_offset', 0.0) != 0.0:
+                status_text += f" (已微調: 縮放 {int(p['scale']*100)}%, 水平 {p.get('horizontal_offset', 0.0):.2f}, 垂直 {p['vertical_offset']:.2f})"
                 
             status_color = "gray"
             if p['status'] == '已對照':
@@ -644,8 +659,10 @@ class PhotoProcessorApp(ctk.CTk):
         
         # 載入此相片的裁切參數至滑桿
         p = self.photos[idx]
+        self.h_offset_slider.set(p.get('horizontal_offset', 0.0))
         self.v_offset_slider.set(p['vertical_offset'])
         self.scale_slider.set(p['scale'])
+        self.h_val_label.configure(text=f"{p.get('horizontal_offset', 0.0):.2f}")
         self.v_val_label.configure(text=f"{p['vertical_offset']:.2f}")
         self.s_val_label.configure(text=f"{int(p['scale']*100)}%")
         
@@ -657,18 +674,22 @@ class PhotoProcessorApp(ctk.CTk):
             return
             
         # 取得滑桿數值並更新到當前選取照片
+        h_offset = self.h_offset_slider.get()
         v_offset = self.v_offset_slider.get()
         scale = self.scale_slider.get()
         
         # 四捨五入以優化顯示與計算
+        h_offset = round(h_offset, 2)
         v_offset = round(v_offset, 2)
         scale = round(scale, 2)
         
+        self.h_val_label.configure(text=f"{h_offset:.2f}")
         self.v_val_label.configure(text=f"{v_offset:.2f}")
         self.s_val_label.configure(text=f"{int(scale*100)}%")
         
         # 暫存到照片設定中
         p = self.photos[self.selected_idx]
+        p['horizontal_offset'] = h_offset
         p['vertical_offset'] = v_offset
         p['scale'] = scale
         
@@ -678,8 +699,8 @@ class PhotoProcessorApp(ctk.CTk):
         # 更新列表中的文字狀態描述，避免整個重繪
         # 我們直接找到該行的 label 進行更新
         status_text = p['status']
-        if p['scale'] != 1.0 or p['vertical_offset'] != 0.0:
-            status_text += f" (已微調: 縮放 {int(p['scale']*100)}%, 偏移 {p['vertical_offset']:.2f})"
+        if p['scale'] != 1.0 or p['vertical_offset'] != 0.0 or p.get('horizontal_offset', 0.0) != 0.0:
+            status_text += f" (已微調: 縮放 {int(p['scale']*100)}%, 水平 {p.get('horizontal_offset', 0.0):.2f}, 垂直 {p['vertical_offset']:.2f})"
         
         # row_frame.winfo_children() 的第三個元件是 lbl_status
         if self.selected_idx < len(self.photo_widgets):
@@ -690,14 +711,17 @@ class PhotoProcessorApp(ctk.CTk):
                 pass
 
     def _set_preset_center(self):
+        self.h_offset_slider.set(0.0)
         self.v_offset_slider.set(0.0)
         self._on_slider_changed()
         
     def _set_preset_top(self):
+        self.h_offset_slider.set(0.0)
         self.v_offset_slider.set(0.15) # 偏上 0.15 是最適合大部分新生照片頭像對齊的通用參數
         self._on_slider_changed()
 
     def _reset_current_photo_settings(self):
+        self.h_offset_slider.set(0.0)
         self.v_offset_slider.set(0.0)
         self.scale_slider.set(1.0)
         self._on_slider_changed()
@@ -706,13 +730,15 @@ class PhotoProcessorApp(ctk.CTk):
         if self.selected_idx == -1:
             return
         
+        curr_h = round(self.h_offset_slider.get(), 2)
         curr_v = round(self.v_offset_slider.get(), 2)
         curr_s = round(self.scale_slider.get(), 2)
         
-        if not messagebox.askyesno("確認", f"您確定要把目前的裁切參數套用到所有照片嗎？\n(垂直位移: {curr_v:.2f}, 縮放比: {int(curr_s*100)}%)"):
+        if not messagebox.askyesno("確認", f"您確定要把目前的裁切參數套用到所有照片嗎？\n(水平位移: {curr_h:.2f}, 垂直位移: {curr_v:.2f}, 縮放比: {int(curr_s*100)}%)"):
             return
             
         for p in self.photos:
+            p['horizontal_offset'] = curr_h
             p['vertical_offset'] = curr_v
             p['scale'] = curr_s
             
@@ -779,17 +805,19 @@ class PhotoProcessorApp(ctk.CTk):
                 orig_w, orig_h = img.size
                 
                 # 2. 計算在原圖上的實際裁切框座標
+                h_offset = p.get('horizontal_offset', 0.0)
                 v_offset = p['vertical_offset']
                 scale = p['scale']
                 
                 x1, y1, x2, y2 = PhotoProcessor.calculate_crop_box(
-                    orig_w, orig_h, self.target_width, self.target_height, scale, v_offset
+                    orig_w, orig_h, self.target_width, self.target_height, scale, v_offset, h_offset
                 )
                 
                 # 3. 渲染左側原始照片預覽 (包含紅色的裁切指示框線)
                 # 等比例縮放至適合預覽框的大小
                 ratio = min(max_disp_w / orig_w, max_disp_h / orig_h)
                 self.preview_ratio = ratio
+                self.orig_width = orig_w
                 self.orig_height = orig_h
                 disp_w = int(orig_w * ratio)
                 disp_h = int(orig_h * ratio)
@@ -820,7 +848,8 @@ class PhotoProcessorApp(ctk.CTk):
                     target_width=self.target_width, 
                     target_height=self.target_height, 
                     scale=scale, 
-                    vertical_offset=v_offset
+                    vertical_offset=v_offset,
+                    horizontal_offset=h_offset
                 )
                 
                 # 縮放到預覽框大小以便顯示
@@ -922,6 +951,7 @@ class PhotoProcessorApp(ctk.CTk):
                         target_height=self.target_height,
                         scale=p['scale'],
                         vertical_offset=p['vertical_offset'],
+                        horizontal_offset=p.get('horizontal_offset', 0.0),
                         output_format=out_format
                     )
                     p['status'] = '成功'
@@ -971,46 +1001,63 @@ class PhotoProcessorApp(ctk.CTk):
 
     def _on_orig_img_press(self, event):
         """
-        記錄滑鼠點下時的 y 座標。
+        記錄滑鼠點下時的 x 與 y 座標。
         """
         if self.selected_idx == -1 or not self.photos:
             return
+        self.drag_start_x = event.x
         self.drag_start_y = event.y
 
     def _on_orig_img_drag(self, event):
         """
-        處理滑鼠拖曳，計算 delta 位移，依比例轉換為 vertical_offset，並連動更新滑桿與預覽。
+        處理滑鼠拖曳，計算 dx 與 dy 位移，依比例轉換為 horizontal_offset 與 vertical_offset，並連動更新滑桿與預覽。
         """
         if self.selected_idx == -1 or not self.photos:
             return
             
         p = self.photos[self.selected_idx]
+        dx = event.x - self.drag_start_x
         dy = event.y - self.drag_start_y
         
-        if dy == 0:
+        if dx == 0 and dy == 0:
             return
             
-        # 將顯示位移 dy 映射到原始圖片的像素高度
+        # 將顯示位移 dx, dy 映射到原始圖片的像素寬高
+        dx_orig = dx / self.preview_ratio
         dy_orig = dy / self.preview_ratio
         
+        # 水平偏移量計算 (dx > 0 代表滑鼠往右拖曳，裁切框往右移，horizontal_offset 增加)
+        d_h_offset = dx_orig / self.orig_width
+        new_h_offset = p.get('horizontal_offset', 0.0) + d_h_offset
+        new_h_offset = max(-0.5, min(0.5, new_h_offset))
+        new_h_offset = round(new_h_offset, 2)
+        
         # 垂直偏移量計算 (dy > 0 代表滑鼠往下拖曳，裁切框往下移，在公式中 vertical_offset 減小)
-        d_offset = - (dy_orig / self.orig_height)
-        new_offset = p['vertical_offset'] + d_offset
-        new_offset = max(-0.5, min(0.5, new_offset))
+        d_v_offset = - (dy_orig / self.orig_height)
+        new_v_offset = p['vertical_offset'] + d_v_offset
+        new_v_offset = max(-0.5, min(0.5, new_v_offset))
+        new_v_offset = round(new_v_offset, 2)
         
-        # 四捨五入避免小數點精度抖動
-        new_offset = round(new_offset, 2)
-        
-        if new_offset != p['vertical_offset']:
-            p['vertical_offset'] = new_offset
-            self.v_offset_slider.set(new_offset)
-            self.v_val_label.configure(text=f"{new_offset:.2f}")
+        changed = False
+        if new_h_offset != p.get('horizontal_offset', 0.0):
+            p['horizontal_offset'] = new_h_offset
+            self.h_offset_slider.set(new_h_offset)
+            self.h_val_label.configure(text=f"{new_h_offset:.2f}")
+            changed = True
+            
+        if new_v_offset != p['vertical_offset']:
+            p['vertical_offset'] = new_v_offset
+            self.v_offset_slider.set(new_v_offset)
+            self.v_val_label.configure(text=f"{new_v_offset:.2f}")
+            changed = True
+            
+        if changed:
             self._update_preview()
             
             # 更新列表顯示
             status_text = p['status']
-            if p['scale'] != 1.0 or p['vertical_offset'] != 0.0:
-                status_text += f" (已微調: 縮放 {int(p['scale']*100)}%, 偏移 {p['vertical_offset']:.2f})"
+            if p['scale'] != 1.0 or p['vertical_offset'] != 0.0 or p.get('horizontal_offset', 0.0) != 0.0:
+                status_text += f" (已微調: 縮放 {int(p['scale']*100)}%, 水平 {p.get('horizontal_offset', 0.0):.2f}, 垂直 {p['vertical_offset']:.2f})"
             if self.selected_idx < len(self.photo_widgets):
                 try:
                     lbl_status = self.photo_widgets[self.selected_idx].winfo_children()[2]
@@ -1019,6 +1066,7 @@ class PhotoProcessorApp(ctk.CTk):
                     pass
                     
         # 更新拖曳起點為當前滑鼠位置
+        self.drag_start_x = event.x
         self.drag_start_y = event.y
 
     def _on_orig_img_release(self, event):
