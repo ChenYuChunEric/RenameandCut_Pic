@@ -10,7 +10,7 @@ import requests
 import webbrowser
 
 # 程式版本與更新設定
-VERSION = "V1.0.0"
+VERSION = "V1.1.0"
 # 請自行替換為實際的 GitHub repository API URL
 UPDATE_URL = "https://api.github.com/repos/ChenYuChunEric/RenameandCut_Pic/releases/latest"
 
